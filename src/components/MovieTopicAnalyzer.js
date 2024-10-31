@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { db } from '../firebase/firebase';
+import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 
 const MovieTopicAnalyzer = () => {
   const [topic, setTopic] = useState('');
@@ -22,17 +24,28 @@ const MovieTopicAnalyzer = () => {
       const data = await response.json();
       setResult(data);
       
-      // Add the new search to history immediately after getting the response
-      const newHistoryItem = {
-        topic,
-        timestamp: new Date().toLocaleString(),
-        result: data
-      };
-      
-      setHistory(prevHistory => [...prevHistory, newHistoryItem]);
-      // Optionally save to localStorage here as well
-      const updatedHistory = [...history, newHistoryItem];
-      localStorage.setItem('searchHistory', JSON.stringify(updatedHistory));
+      // Add to Firebase
+      try {
+        const docRef = await addDoc(collection(db, "searches"), {
+          topic: topic,
+          result: data,
+          timestamp: serverTimestamp(),
+          // Add user ID if you're tracking per user
+          // userId: currentUser.uid 
+        });
+        
+        // Create new history item with Firebase doc ID
+        const newHistoryItem = {
+          id: docRef.id,
+          topic,
+          timestamp: new Date().toLocaleString(),
+          result: data
+        };
+        
+        setHistory(prevHistory => [...prevHistory, newHistoryItem]);
+      } catch (error) {
+        console.error("Error adding to Firebase: ", error);
+      }
 
     } catch (error) {
       console.error('Error:', error);
@@ -41,6 +54,25 @@ const MovieTopicAnalyzer = () => {
       setLoading(false);
     }
   };
+
+  // Add useEffect to fetch history from Firebase when component mounts
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "searches"));
+        const historyData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
+        }));
+        setHistory(historyData);
+      } catch (error) {
+        console.error("Error fetching history: ", error);
+      }
+    };
+
+    fetchHistory();
+  }, []);
 
   // ... rest of the component ...
 } 
