@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '@/firebase/firebase';
+import { db } from '../firebase/firebase';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 
 const MovieTopicAnalyzer = () => {
