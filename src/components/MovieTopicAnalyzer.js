@@ -5,8 +5,29 @@ import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore
 const MovieTopicAnalyzer = () => {
   const [topic, setTopic] = useState('');
   const [result, setResult] = useState(null);
-  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // Add this useEffect to fetch history when component mounts
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  // Separate function to fetch history
+  const fetchHistory = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "searches"));
+      const historyData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
+      }));
+      setHistory(historyData);
+    } catch (error) {
+      console.error("Error fetching history: ", error);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!topic) return;
@@ -24,17 +45,15 @@ const MovieTopicAnalyzer = () => {
       const data = await response.json();
       setResult(data);
       
-      // Add to Firebase
+      // Add to Firebase and update history regardless of menu state
       try {
         const docRef = await addDoc(collection(db, "searches"), {
           topic: topic,
           result: data,
           timestamp: serverTimestamp(),
-          // Add user ID if you're tracking per user
-          // userId: currentUser.uid 
         });
         
-        // Create new history item with Firebase doc ID
+        // Create new history item
         const newHistoryItem = {
           id: docRef.id,
           topic,
@@ -42,7 +61,12 @@ const MovieTopicAnalyzer = () => {
           result: data
         };
         
+        // Update local history state
         setHistory(prevHistory => [...prevHistory, newHistoryItem]);
+        
+        // Fetch fresh history from Firebase
+        fetchHistory();
+        
       } catch (error) {
         console.error("Error adding to Firebase: ", error);
       }
@@ -55,24 +79,30 @@ const MovieTopicAnalyzer = () => {
     }
   };
 
-  // Add useEffect to fetch history from Firebase when component mounts
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "searches"));
-        const historyData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
-        }));
-        setHistory(historyData);
-      } catch (error) {
-        console.error("Error fetching history: ", error);
-      }
-    };
+  // ... rest of your component code ...
 
-    fetchHistory();
-  }, []);
-
-  // ... rest of the component ...
-} 
+  return (
+    <div>
+      {/* ... existing JSX ... */}
+      
+      {/* History hamburger menu */}
+      <div className={`history-menu ${isHistoryOpen ? 'open' : ''}`}>
+        <button onClick={() => setIsHistoryOpen(!isHistoryOpen)}>
+          {/* Your hamburger icon */}
+        </button>
+        
+        {isHistoryOpen && (
+          <div className="history-content">
+            {history.map((item) => (
+              <div key={item.id} className="history-item">
+                {/* Your history item display */}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* ... rest of your JSX ... */}
+    </div>
+  );
+}; 
