@@ -9,7 +9,6 @@ const MovieTopicAnalyzer = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
-  // Fetch history on component mount
   useEffect(() => {
     fetchHistory();
   }, []);
@@ -43,17 +42,6 @@ const MovieTopicAnalyzer = () => {
 
       const data = await response.json();
       setResult(data);
-
-      // Store in Firebase immediately after getting response
-      await addDoc(collection(db, "searches"), {
-        topic,
-        result: data,
-        timestamp: serverTimestamp(),
-      });
-
-      // Fetch updated history
-      await fetchHistory();
-
     } catch (error) {
       console.error('Error:', error);
       setResult({ error: 'Failed to analyze topic' });
@@ -62,7 +50,52 @@ const MovieTopicAnalyzer = () => {
     }
   };
 
-  // ... rest of your existing component code ...
+  const handleSaveResponse = async () => {
+    if (!result || !topic) return;
+
+    try {
+      await addDoc(collection(db, "searches"), {
+        topic,
+        result,
+        timestamp: serverTimestamp(),
+      });
+
+      // Fetch updated history immediately
+      await fetchHistory();
+
+      // Optional: Show success message
+      alert('Response saved successfully!');
+    } catch (error) {
+      console.error("Error saving response:", error);
+      alert('Failed to save response');
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-4">
+      {/* ... existing input and button ... */}
+
+      {/* Show result and save button */}
+      {result && !loading && (
+        <div className="mt-4">
+          <div className="bg-white p-4 rounded-lg shadow">
+            {/* Your existing result display */}
+            <pre className="whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre>
+            
+            {/* Add Save Response button */}
+            <button
+              onClick={handleSaveResponse}
+              className="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
+            >
+              Save Response
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ... rest of your component (history menu, etc.) ... */}
+    </div>
+  );
 };
 
 export default MovieTopicAnalyzer; 
