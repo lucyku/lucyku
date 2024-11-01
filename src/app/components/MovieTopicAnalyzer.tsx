@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 interface SearchResult {
   id: string;
@@ -18,27 +18,23 @@ const MovieTopicAnalyzer = () => {
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
-  // Function to fetch history
-  const fetchHistory = async () => {
-    try {
-      const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
-      const querySnapshot = await getDocs(q);
-      const historyData = querySnapshot.docs.map(doc => ({
+  // Set up real-time listener for history updates
+  useEffect(() => {
+    const searchesRef = collection(db, 'searches');
+    const q = query(searchesRef, orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const searches = snapshot.docs.map(doc => ({
         id: doc.id,
         topic: doc.data().topic,
         result: doc.data().result,
         timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
       }));
-      console.log("Fetched history:", historyData); // Debug log
-      setHistory(historyData);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-    }
-  };
+      console.log('History updated:', searches); // Debug log
+      setHistory(searches);
+    });
 
-  // Fetch history on component mount
-  useEffect(() => {
-    fetchHistory();
+    return () => unsubscribe();
   }, []);
 
   const handleAnalyze = async () => {
@@ -59,30 +55,30 @@ const MovieTopicAnalyzer = () => {
       setResult(data);
 
       // 2. Save to Firebase
-      const docRef = await addDoc(collection(db, "searches"), {
-        topic,
+      const searchData = {
+        topic: topic.trim(),
         result: data,
         timestamp: serverTimestamp(),
-      });
-
-      // 3. Add to local state immediately
-      const newSearch: SearchResult = {
-        id: docRef.id,
-        topic,
-        result: data,
-        timestamp: new Date().toLocaleString()
       };
 
-      // Update local state immediately
-      setHistory(prevHistory => [newSearch, ...prevHistory]);
-      
-      console.log("Search saved successfully:", newSearch); // Debug log
+      const docRef = await addDoc(collection(db, 'searches'), searchData);
+      console.log('Search saved with ID:', docRef.id); // Debug log
+
+      // Clear input after successful search
+      setTopic('');
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error during analysis or save:', error);
       setResult({ error: 'Failed to analyze topic' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loading) {
+      handleAnalyze();
     }
   };
 
@@ -95,6 +91,7 @@ const MovieTopicAnalyzer = () => {
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
+            onKeyPress={handleKeyPress}
             placeholder="Enter a movie topic..."
             className="flex-1 p-2 border rounded-lg"
           />
@@ -118,12 +115,7 @@ const MovieTopicAnalyzer = () => {
 
       {/* Hamburger button */}
       <button
-        onClick={() => {
-          setIsHistoryOpen(!isHistoryOpen);
-          if (!isHistoryOpen) {
-            fetchHistory(); // Refresh history when opening menu
-          }
-        }}
+        onClick={() => setIsHistoryOpen(!isHistoryOpen)}
         className="fixed top-4 right-4 p-2 bg-gray-800 text-white rounded-lg z-50"
       >
         <svg
