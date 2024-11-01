@@ -4,12 +4,11 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
 import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
-// Define interfaces for our types
 interface SearchResult {
+  id: string;
   topic: string;
   result: any;
   timestamp: string;
-  id: string;
 }
 
 const MovieTopicAnalyzer = () => {
@@ -19,6 +18,7 @@ const MovieTopicAnalyzer = () => {
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
+  // Fetch history on mount and when new searches are added
   useEffect(() => {
     fetchHistory();
   }, []);
@@ -39,8 +39,22 @@ const MovieTopicAnalyzer = () => {
     }
   };
 
+  const saveToFirebase = async (searchTopic: string, searchResult: any) => {
+    try {
+      const docRef = await addDoc(collection(db, "searches"), {
+        topic: searchTopic,
+        result: searchResult,
+        timestamp: serverTimestamp(),
+      });
+      console.log("Search saved with ID: ", docRef.id);
+      await fetchHistory(); // Refresh history after saving
+    } catch (error) {
+      console.error("Error saving to Firebase:", error);
+    }
+  };
+
   const handleAnalyze = async () => {
-    if (!topic) return;
+    if (!topic.trim()) return;
 
     setLoading(true);
     try {
@@ -55,15 +69,8 @@ const MovieTopicAnalyzer = () => {
       const data = await response.json();
       setResult(data);
 
-      // Store in Firebase and update history immediately
-      await addDoc(collection(db, "searches"), {
-        topic,
-        result: data,
-        timestamp: serverTimestamp(),
-      });
-
-      // Fetch updated history
-      await fetchHistory();
+      // Save to Firebase after successful API response
+      await saveToFirebase(topic, data);
 
     } catch (error) {
       console.error('Error:', error);
@@ -106,7 +113,7 @@ const MovieTopicAnalyzer = () => {
       {/* Hamburger button */}
       <button
         onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-        className="fixed top-4 right-4 p-2 bg-gray-800 text-white rounded-lg"
+        className="fixed top-4 right-4 p-2 bg-gray-800 text-white rounded-lg z-50"
       >
         <svg
           className="w-6 h-6"
@@ -127,7 +134,7 @@ const MovieTopicAnalyzer = () => {
       <div
         className={`fixed top-0 right-0 h-full w-80 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
           isHistoryOpen ? 'translate-x-0' : 'translate-x-full'
-        } overflow-y-auto`}
+        } overflow-y-auto z-40`}
       >
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
