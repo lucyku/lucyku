@@ -4,14 +4,21 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
 import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
-const MovieTopicAnalyzer = () => {
-  const [topic, setTopic] = useState('');
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+// Define interfaces for our types
+interface SearchResult {
+  topic: string;
+  result: any;
+  timestamp: string;
+  id: string;
+}
 
-  // Fetch history when component mounts
+const MovieTopicAnalyzer = () => {
+  const [topic, setTopic] = useState<string>('');
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [history, setHistory] = useState<SearchResult[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+
   useEffect(() => {
     fetchHistory();
   }, []);
@@ -20,9 +27,10 @@ const MovieTopicAnalyzer = () => {
     try {
       const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
       const querySnapshot = await getDocs(q);
-      const historyData = querySnapshot.docs.map(doc => ({
+      const historyData: SearchResult[] = querySnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
+        topic: doc.data().topic,
+        result: doc.data().result,
         timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
       }));
       setHistory(historyData);
@@ -119,7 +127,7 @@ const MovieTopicAnalyzer = () => {
       <div
         className={`fixed top-0 right-0 h-full w-80 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
           isHistoryOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        } overflow-y-auto`}
       >
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
