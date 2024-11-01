@@ -1,9 +1,11 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { db } from '../firebase/firebase';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import Link from 'next/link';
 
-const HistoryPage = () => {
+export default function HistoryPage() {
   const [searchHistory, setSearchHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +31,7 @@ const HistoryPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <main className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Search History</h1>
@@ -74,8 +76,6 @@ const HistoryPage = () => {
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
-};
-
-export default HistoryPage; 
+} 
