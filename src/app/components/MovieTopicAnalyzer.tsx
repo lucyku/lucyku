@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
 interface SearchResult {
   id: string;
@@ -18,52 +18,35 @@ const MovieTopicAnalyzer = () => {
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
-  // Set up real-time listener for history
-  useEffect(() => {
-    // Reference to the searches collection
-    const searchesRef = collection(db, 'searches');
-    const q = query(searchesRef, orderBy('timestamp', 'desc'));
-
-    // Set up the listener
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const searches: SearchResult[] = [];
-      querySnapshot.forEach((doc) => {
-        searches.push({
-          id: doc.id,
-          topic: doc.data().topic,
-          result: doc.data().result,
-          timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
-        });
-      });
-      setHistory(searches);
-    }, (error) => {
-      console.error("Error listening to history:", error);
-    });
-
-    // Cleanup subscription
-    return () => unsubscribe();
-  }, []);
-
-  const saveSearch = async (searchTopic: string, searchResult: any) => {
+  // Function to fetch history
+  const fetchHistory = async () => {
     try {
-      const searchesRef = collection(db, 'searches');
-      await addDoc(searchesRef, {
-        topic: searchTopic,
-        result: searchResult,
-        timestamp: serverTimestamp()
-      });
-      console.log('Search saved successfully');
+      const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
+      const querySnapshot = await getDocs(q);
+      const historyData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        topic: doc.data().topic,
+        result: doc.data().result,
+        timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
+      }));
+      console.log("Fetched history:", historyData); // Debug log
+      setHistory(historyData);
     } catch (error) {
-      console.error('Error saving search:', error);
+      console.error("Error fetching history:", error);
     }
   };
+
+  // Fetch history on component mount
+  useEffect(() => {
+    fetchHistory();
+  }, []);
 
   const handleAnalyze = async () => {
     if (!topic.trim()) return;
 
     setLoading(true);
     try {
-      // Make API call
+      // 1. Make API call
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -75,8 +58,25 @@ const MovieTopicAnalyzer = () => {
       const data = await response.json();
       setResult(data);
 
-      // Save to Firebase
-      await saveSearch(topic, data);
+      // 2. Save to Firebase
+      const docRef = await addDoc(collection(db, "searches"), {
+        topic,
+        result: data,
+        timestamp: serverTimestamp(),
+      });
+
+      // 3. Add to local state immediately
+      const newSearch: SearchResult = {
+        id: docRef.id,
+        topic,
+        result: data,
+        timestamp: new Date().toLocaleString()
+      };
+
+      // Update local state immediately
+      setHistory(prevHistory => [newSearch, ...prevHistory]);
+      
+      console.log("Search saved successfully:", newSearch); // Debug log
 
     } catch (error) {
       console.error('Error:', error);
@@ -118,7 +118,12 @@ const MovieTopicAnalyzer = () => {
 
       {/* Hamburger button */}
       <button
-        onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+        onClick={() => {
+          setIsHistoryOpen(!isHistoryOpen);
+          if (!isHistoryOpen) {
+            fetchHistory(); // Refresh history when opening menu
+          }
+        }}
         className="fixed top-4 right-4 p-2 bg-gray-800 text-white rounded-lg z-50"
       >
         <svg
