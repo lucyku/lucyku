@@ -18,31 +18,52 @@ const MovieTopicAnalyzer = () => {
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
-  // Set up real-time listener for history updates
+  // Set up real-time listener for history
   useEffect(() => {
-    const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
-    
-    // Create real-time listener
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const historyData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        topic: doc.data().topic,
-        result: doc.data().result,
-        timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
-      }));
-      setHistory(historyData);
+    // Reference to the searches collection
+    const searchesRef = collection(db, 'searches');
+    const q = query(searchesRef, orderBy('timestamp', 'desc'));
+
+    // Set up the listener
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const searches: SearchResult[] = [];
+      querySnapshot.forEach((doc) => {
+        searches.push({
+          id: doc.id,
+          topic: doc.data().topic,
+          result: doc.data().result,
+          timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
+        });
+      });
+      setHistory(searches);
+    }, (error) => {
+      console.error("Error listening to history:", error);
     });
 
-    // Cleanup listener on unmount
+    // Cleanup subscription
     return () => unsubscribe();
   }, []);
+
+  const saveSearch = async (searchTopic: string, searchResult: any) => {
+    try {
+      const searchesRef = collection(db, 'searches');
+      await addDoc(searchesRef, {
+        topic: searchTopic,
+        result: searchResult,
+        timestamp: serverTimestamp()
+      });
+      console.log('Search saved successfully');
+    } catch (error) {
+      console.error('Error saving search:', error);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!topic.trim()) return;
 
     setLoading(true);
     try {
-      // 1. Get API response
+      // Make API call
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -54,17 +75,8 @@ const MovieTopicAnalyzer = () => {
       const data = await response.json();
       setResult(data);
 
-      // 2. Save to Firebase
-      try {
-        await addDoc(collection(db, "searches"), {
-          topic,
-          result: data,
-          timestamp: serverTimestamp(),
-        });
-        console.log('Search saved to Firebase successfully');
-      } catch (firebaseError) {
-        console.error('Error saving to Firebase:', firebaseError);
-      }
+      // Save to Firebase
+      await saveSearch(topic, data);
 
     } catch (error) {
       console.error('Error:', error);
