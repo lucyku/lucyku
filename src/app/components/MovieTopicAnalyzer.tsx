@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
 interface SearchResult {
   id: string;
@@ -17,28 +17,52 @@ const MovieTopicAnalyzer = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Set up real-time listener for history updates
-  useEffect(() => {
-    const searchesRef = collection(db, 'searches');
-    const q = query(searchesRef, orderBy('timestamp', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const searches = snapshot.docs.map(doc => ({
+  // Fetch history function
+  const fetchHistory = async () => {
+    try {
+      const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
+      const querySnapshot = await getDocs(q);
+      const historyData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         topic: doc.data().topic,
         result: doc.data().result,
         timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
       }));
-      console.log('History updated:', searches); // Debug log
-      setHistory(searches);
-    });
+      setHistory(historyData);
+    } catch (error) {
+      console.error("Error fetching history:", error);
+    }
+  };
 
-    return () => unsubscribe();
+  // Initial history fetch
+  useEffect(() => {
+    fetchHistory();
   }, []);
 
+  // Save to Firebase function
+  const saveToFirebase = async (searchTopic: string, searchResult: any) => {
+    setIsSaving(true);
+    try {
+      const docRef = await addDoc(collection(db, "searches"), {
+        topic: searchTopic,
+        result: searchResult,
+        timestamp: serverTimestamp()
+      });
+      console.log("Saved to Firebase with ID:", docRef.id);
+      await fetchHistory(); // Refresh history after successful save
+      return true;
+    } catch (error) {
+      console.error("Error saving to Firebase:", error);
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAnalyze = async () => {
-    if (!topic.trim()) return;
+    if (!topic.trim() || loading || isSaving) return;
 
     setLoading(true);
     try {
@@ -52,23 +76,20 @@ const MovieTopicAnalyzer = () => {
       });
 
       const data = await response.json();
+      
+      // 2. Update result state
       setResult(data);
 
-      // 2. Save to Firebase
-      const searchData = {
-        topic: topic.trim(),
-        result: data,
-        timestamp: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(collection(db, 'searches'), searchData);
-      console.log('Search saved with ID:', docRef.id); // Debug log
-
-      // Clear input after successful search
-      setTopic('');
+      // 3. Save to Firebase and wait for completion
+      const savedSuccessfully = await saveToFirebase(topic, data);
+      
+      if (savedSuccessfully) {
+        setTopic(''); // Clear input only after successful save
+        console.log("Search completed and saved successfully");
+      }
 
     } catch (error) {
-      console.error('Error during analysis or save:', error);
+      console.error('Error:', error);
       setResult({ error: 'Failed to analyze topic' });
     } finally {
       setLoading(false);
