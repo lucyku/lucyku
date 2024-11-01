@@ -18,46 +18,12 @@ const MovieTopicAnalyzer = () => {
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
-  // Fetch history on mount and when new searches are added
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
-  const fetchHistory = async () => {
-    try {
-      const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
-      const querySnapshot = await getDocs(q);
-      const historyData: SearchResult[] = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        topic: doc.data().topic,
-        result: doc.data().result,
-        timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
-      }));
-      setHistory(historyData);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-    }
-  };
-
-  const saveToFirebase = async (searchTopic: string, searchResult: any) => {
-    try {
-      const docRef = await addDoc(collection(db, "searches"), {
-        topic: searchTopic,
-        result: searchResult,
-        timestamp: serverTimestamp(),
-      });
-      console.log("Search saved with ID: ", docRef.id);
-      await fetchHistory(); // Refresh history after saving
-    } catch (error) {
-      console.error("Error saving to Firebase:", error);
-    }
-  };
-
   const handleAnalyze = async () => {
     if (!topic.trim()) return;
 
     setLoading(true);
     try {
+      // 1. Get API response
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -69,8 +35,22 @@ const MovieTopicAnalyzer = () => {
       const data = await response.json();
       setResult(data);
 
-      // Save to Firebase after successful API response
-      await saveToFirebase(topic, data);
+      // 2. Save to Firebase
+      const docRef = await addDoc(collection(db, "searches"), {
+        topic,
+        result: data,
+        timestamp: serverTimestamp(),
+      });
+
+      // 3. Add to local history immediately
+      const newHistoryItem: SearchResult = {
+        id: docRef.id,
+        topic,
+        result: data,
+        timestamp: new Date().toLocaleString(),
+      };
+
+      setHistory(prev => [newHistoryItem, ...prev]);
 
     } catch (error) {
       console.error('Error:', error);
@@ -79,6 +59,27 @@ const MovieTopicAnalyzer = () => {
       setLoading(false);
     }
   };
+
+  // Fetch initial history when component mounts
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
+        const querySnapshot = await getDocs(q);
+        const historyData: SearchResult[] = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          topic: doc.data().topic,
+          result: doc.data().result,
+          timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
+        }));
+        setHistory(historyData);
+      } catch (error) {
+        console.error("Error fetching history:", error);
+      }
+    };
+
+    fetchHistory();
+  }, []);
 
   return (
     <div className="container mx-auto p-4 relative">
