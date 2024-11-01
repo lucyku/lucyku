@@ -1,31 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import Link from 'next/link';
 
 const MovieTopicAnalyzer = () => {
   const [topic, setTopic] = useState<string>('');
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
-  const fetchHistory = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "searches"));
-      const historyData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
-      }));
-      setHistory(historyData);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-    }
-  };
 
   const handleAnalyze = async () => {
     if (!topic) return;
@@ -42,6 +23,14 @@ const MovieTopicAnalyzer = () => {
 
       const data = await response.json();
       setResult(data);
+
+      // Store in Firebase
+      await addDoc(collection(db, "searches"), {
+        topic,
+        result: data,
+        timestamp: serverTimestamp(),
+      });
+
     } catch (error) {
       console.error('Error:', error);
       setResult({ error: 'Failed to analyze topic' });
@@ -50,50 +39,23 @@ const MovieTopicAnalyzer = () => {
     }
   };
 
-  const handleSaveResponse = async () => {
-    if (!result || !topic) return;
-
-    try {
-      await addDoc(collection(db, "searches"), {
-        topic,
-        result,
-        timestamp: serverTimestamp(),
-      });
-
-      // Fetch updated history immediately
-      await fetchHistory();
-
-      // Optional: Show success message
-      alert('Response saved successfully!');
-    } catch (error) {
-      console.error("Error saving response:", error);
-      alert('Failed to save response');
-    }
-  };
-
   return (
     <div className="container mx-auto p-4">
-      {/* ... existing input and button ... */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Movie Topic Analyzer</h1>
+        <Link 
+          href="/history" 
+          className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+          </svg>
+          View History
+        </Link>
+      </div>
 
-      {/* Show result and save button */}
-      {result && !loading && (
-        <div className="mt-4">
-          <div className="bg-white p-4 rounded-lg shadow">
-            {/* Your existing result display */}
-            <pre className="whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre>
-            
-            {/* Add Save Response button */}
-            <button
-              onClick={handleSaveResponse}
-              className="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
-            >
-              Save Response
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ... rest of your component (history menu, etc.) ... */}
+      {/* Your existing search input and results display */}
+      {/* ... */}
     </div>
   );
 };
