@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 interface SearchResult {
   id: string;
@@ -17,6 +17,25 @@ const MovieTopicAnalyzer = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [history, setHistory] = useState<SearchResult[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+
+  // Set up real-time listener for history updates
+  useEffect(() => {
+    const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
+    
+    // Create real-time listener
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const historyData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        topic: doc.data().topic,
+        result: doc.data().result,
+        timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
+      }));
+      setHistory(historyData);
+    });
+
+    // Cleanup listener on unmount
+    return () => unsubscribe();
+  }, []);
 
   const handleAnalyze = async () => {
     if (!topic.trim()) return;
@@ -36,21 +55,16 @@ const MovieTopicAnalyzer = () => {
       setResult(data);
 
       // 2. Save to Firebase
-      const docRef = await addDoc(collection(db, "searches"), {
-        topic,
-        result: data,
-        timestamp: serverTimestamp(),
-      });
-
-      // 3. Add to local history immediately
-      const newHistoryItem: SearchResult = {
-        id: docRef.id,
-        topic,
-        result: data,
-        timestamp: new Date().toLocaleString(),
-      };
-
-      setHistory(prev => [newHistoryItem, ...prev]);
+      try {
+        await addDoc(collection(db, "searches"), {
+          topic,
+          result: data,
+          timestamp: serverTimestamp(),
+        });
+        console.log('Search saved to Firebase successfully');
+      } catch (firebaseError) {
+        console.error('Error saving to Firebase:', firebaseError);
+      }
 
     } catch (error) {
       console.error('Error:', error);
@@ -59,27 +73,6 @@ const MovieTopicAnalyzer = () => {
       setLoading(false);
     }
   };
-
-  // Fetch initial history when component mounts
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const q = query(collection(db, "searches"), orderBy("timestamp", "desc"));
-        const querySnapshot = await getDocs(q);
-        const historyData: SearchResult[] = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          topic: doc.data().topic,
-          result: doc.data().result,
-          timestamp: doc.data().timestamp?.toDate().toLocaleString() || new Date().toLocaleString()
-        }));
-        setHistory(historyData);
-      } catch (error) {
-        console.error("Error fetching history:", error);
-      }
-    };
-
-    fetchHistory();
-  }, []);
 
   return (
     <div className="container mx-auto p-4 relative">
@@ -142,7 +135,7 @@ const MovieTopicAnalyzer = () => {
             <h2 className="text-xl font-bold">Search History</h2>
             <button
               onClick={() => setIsHistoryOpen(false)}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 text-2xl"
             >
               ×
             </button>
@@ -167,4 +160,4 @@ const MovieTopicAnalyzer = () => {
   );
 };
 
-export default MovieTopicAnalyzer; 
+export default MovieTopicAnalyzer;
