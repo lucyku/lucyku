@@ -14,6 +14,7 @@ interface SearchResult {
 const SharedHamburger = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [history, setHistory] = useState<SearchResult[]>([]);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const fetchHistory = async () => {
     try {
@@ -31,12 +32,21 @@ const SharedHamburger = () => {
     }
   };
 
-  // Fetch history when menu opens
   useEffect(() => {
     if (isHistoryOpen) {
       fetchHistory();
     }
   }, [isHistoryOpen]);
+
+  const toggleItem = (id: string) => {
+    const newExpandedItems = new Set(expandedItems);
+    if (expandedItems.has(id)) {
+      newExpandedItems.delete(id);
+    } else {
+      newExpandedItems.add(id);
+    }
+    setExpandedItems(newExpandedItems);
+  };
 
   return (
     <>
@@ -62,7 +72,7 @@ const SharedHamburger = () => {
 
       {/* History sidebar */}
       <div
-        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-full w-full sm:w-80 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
           isHistoryOpen ? 'translate-x-0' : 'translate-x-full'
         } overflow-y-auto z-40`}
       >
@@ -79,11 +89,25 @@ const SharedHamburger = () => {
           <div className="space-y-4">
             {history.map((item) => (
               <div key={item.id} className="border-b pb-4">
-                <p className="font-semibold">{item.topic}</p>
-                <p className="text-sm text-gray-500">{item.timestamp}</p>
-                <pre className="mt-2 text-sm whitespace-pre-wrap bg-gray-50 p-2 rounded">
-                  {JSON.stringify(item.result, null, 2)}
-                </pre>
+                <div 
+                  className="flex justify-between items-center cursor-pointer"
+                  onClick={() => toggleItem(item.id)}
+                >
+                  <div>
+                    <p className="font-semibold">{item.topic}</p>
+                    <p className="text-sm text-gray-500">{item.timestamp}</p>
+                  </div>
+                  <button className="text-gray-500 p-2">
+                    {expandedItems.has(item.id) ? '▼' : '▶'}
+                  </button>
+                </div>
+                {expandedItems.has(item.id) && (
+                  <div className="mt-2 transition-all duration-200">
+                    <pre className="text-sm whitespace-pre-wrap bg-gray-50 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(item.result, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
             ))}
             {history.length === 0 && (
