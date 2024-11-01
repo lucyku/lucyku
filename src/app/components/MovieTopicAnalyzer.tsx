@@ -1,16 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import HistorySidebar from './HistorySidebar';
-
-interface SearchResult {
-  id: string;
-  topic: string;
-  result: any;
-  timestamp: string;
-}
 
 const MovieTopicAnalyzer = () => {
   const [topic, setTopic] = useState<string>('');
@@ -29,7 +22,6 @@ const MovieTopicAnalyzer = () => {
         timestamp: serverTimestamp()
       });
       console.log("Saved to Firebase with ID:", docRef.id);
-      await fetchHistory(); // Refresh history after successful save
       return true;
     } catch (error) {
       console.error("Error saving to Firebase:", error);
@@ -74,13 +66,6 @@ const MovieTopicAnalyzer = () => {
     }
   };
 
-  // Handle Enter key press
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !loading) {
-      handleAnalyze();
-    }
-  };
-
   return (
     <div className="container mx-auto p-4 relative">
       {/* Main content */}
@@ -90,13 +75,12 @@ const MovieTopicAnalyzer = () => {
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            onKeyPress={handleKeyPress}
             placeholder="Enter a movie topic..."
             className="flex-1 p-2 border rounded-lg"
           />
           <button
             onClick={handleAnalyze}
-            disabled={loading}
+            disabled={loading || isSaving}
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
           >
             {loading ? 'Analyzing...' : 'Analyze'}
